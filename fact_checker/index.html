@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Graph Fact Checker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-weight: 600;
+            margin: 15px 0;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result.supported {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .result.unknown {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+
+        .result.contradicted {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+
+        .result-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .confidence-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+
+        .triples-list {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .triple {
+            background: rgba(255, 255, 255, 0.3);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Knowledge Graph Fact Checker</h1>
+            <p>Verify statements against a dynamically built knowledge graph using REBEL model</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Knowledge Graph Builder -->
+            <div class="card">
+                <h2>Build Knowledge Graph</h2>
+                <form id="kgForm">
+                    <div class="form-group">
+                        <label for="inputText">Enter Text:</label>
+                        <textarea id="inputText" placeholder="Paste your text here. The app will extract relationships and build a knowledge graph..."></textarea>
+                    </div>
+                    <button type="submit">Build Knowledge Graph</button>
+                    <div class="loading" id="kgLoading">
+                        <div class="spinner"></div> Processing text...
+                    </div>
+                </form>
+                <div id="kgResult"></div>
+            </div>
+
+            <!-- Fact Checker -->
+            <div class="card">
+                <h2>Fact Check Statement</h2>
+                <form id="factCheckForm">
+                    <div class="form-group">
+                        <label for="statement">Enter Statement to Verify:</label>
+                        <input type="text" id="statement" placeholder="e.g., Elon Musk is the CEO of Tesla">
+                    </div>
+                    <button type="submit">Check Statement</button>
+                    <div class="loading" id="fcLoading">
+                        <div class="spinner"></div> Fact-checking...
+                    </div>
+                </form>
+                <div id="factCheckResult"></div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card">
+            <h2>Knowledge Graph Statistics</h2>
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab(event, 'stats')">Stats</button>
+                <button class="tab-btn" onclick="switchTab(event, 'triples')">All Triples</button>
+            </div>
+
+            <div id="stats" class="tab-content active">
+                <div id="statsContainer"></div>
+                <button onclick="refreshStats()" style="margin-top: 15px;">Refresh Stats</button>
+            </div>
+
+            <div id="triples" class="tab-content">
+                <div id="triplesContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:8000";
+
+        // Build Knowledge Graph
+        document.getElementById('kgForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = document.getElementById('inputText').value.trim();
+
+            if (!text) {
+                alert('Please enter some text');
+                return;
+            }
+
+            showLoading('kgLoading', true);
+
+            try {
+                const response = await fetch(`${API_URL}/api/build-kg`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult('kgResult', `
+                        <div class="success">
+                            <strong> Knowledge Graph Built Successfully!</strong><br>
+                            Triples: ${data.triples_count} | Nodes: ${data.nodes_count} | Edges: ${data.edges_count}
+                        </div>
+                    `);
+                    refreshStats();
+                } else {
+                    showResult('kgResult', `<div class="error">❌ Error: ${data.detail}</div>`);
+                }
+            } catch (error) {
+                showResult('kgResult', `<div class="error">❌ Error: ${error.message}</div>`);
+            } finally {
+                showLoading('kgLoading', false);
+            }
+        });
+
+        // Fact Check
+        document.getElementById('factCheckForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const statement = document.getElementById('statement').value.trim();
+
+            if (!statement) {
+                alert('Please enter a statement');
+                return;
+            }
+
+            showLoading('fcLoading', true);
+
+            try {
+                const response = await fetch(`${API_URL}/api/fact-check`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ statement })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const resultClass = data.result.toLowerCase();
+                    const emoji = data.result === 'SUPPORTED' ? '✅' : data.result === 'UNKNOWN' ? '❓' : '❌';
+                    
+                    let triplesHtml = '';
+                    if (data.supporting_triples.length > 0) {
+                        triplesHtml = '<div class="triples-list"><strong>Supporting Triples:</strong>';
+                        data.supporting_triples.forEach(triple => {
+                            triplesHtml += `<div class="triple">${triple[0]} → <em>${triple[1]}</em> → ${triple[2]}</div>`;
+                        });
+                        triplesHtml += '</div>';
+                    }
+
+                    showResult('factCheckResult', `
+                        <div class="result show ${resultClass}">
+                            <div class="result-title">${emoji} ${data.result}</div>
+                            <p><strong>Statement:</strong> "${data.statement}"</p>
+                            <p><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</p>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${data.confidence * 100}%"></div>
+                            </div>
+                            <p><strong>Analysis:</strong> ${data.explanation}</p>
+                            ${triplesHtml}
+                        </div>
+                    `);
+                } else {
+                    showResult('factCheckResult', `<div class="error">❌ Error: ${data.detail}</div>`);
+                }
+            } catch (error) {
+                showResult('factCheckResult', `<div class="error">❌ Error: ${error.message}</div>`);
+            } finally {
+                showLoading('fcLoading', false);
+            }
+        });
+
+        // Refresh Stats
+        async function refreshStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/kg-stats`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('statsContainer').innerHTML = `
+                        <div class="stats">
+                            <div class="stat-box">
+                                <div class="stat-number">${data.nodes}</div>
+                                <div class="stat-label">Nodes (Entities)</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-number">${data.edges}</div>
+                                <div class="stat-label">Edges (Relations)</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-number">${data.triples}</div>
+                                <div class="stat-label">Total Triples</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        // Load all triples
+        async function loadTriples() {
+            try {
+                const response = await fetch(`${API_URL}/api/triples`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    let html = '<div class="triples-list" style="max-height: 400px;">';
+                    data.triples.forEach((triple, idx) => {
+                        html += `<div class="triple"><strong>#${idx + 1}:</strong> ${triple[0]} → <em>${triple[1]}</em> → ${triple[2]}</div>`;
+                    });
+                    html += '</div>';
+                    document.getElementById('triplesContainer').innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Error fetching triples:', error);
+            }
+        }
+
+        // Tab switching
+        function switchTab(event, tabName) {
+            event.target.parentElement.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'triples') {
+                loadTriples();
+            }
+        }
+
+        function showLoading(id, show) {
+            document.getElementById(id).classList.toggle('show', show);
+        }
+
+        function showResult(id, html) {
+            document.getElementById(id).innerHTML = html;
+        }
+    </script>
+</body>
+</html>
